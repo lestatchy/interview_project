@@ -46,18 +46,6 @@ shinyServer(function(input, output) {
     return(list(lst,Ret))
   })
   t <- reactive({
-    # index = match(input$ticker,names(dat))
-    # t1 = as.Date(input$period[1])
-    # t2 = as.Date(input$period[2])
-    # 
-    # if (t1>=Dates[1] && t2<=Dates[2]) {
-    #   lst = dat[[index]]
-    #   lst = lst[lst$date>=t1 & lst$date<=t2,]
-    # }else{
-    #   dat = GetData(c(t1,t2))
-    #   lst = dat[[index]]
-    #   lst = lst[lst$date>=t1 & lst$date<=t2,]
-    # }
     lst = DataTable()[[1]]
     L = length(dat)
     l = nrow(lst)

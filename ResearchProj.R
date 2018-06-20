@@ -1,9 +1,10 @@
+
+test = readRDS('Data.rds')
 Ret = test[[1]][,c(1,8)]
 Stocks = names(test)
 colnames(Ret)[2] = Stocks[1]
-L = length(SP500.list)
+L = length(test)
 index = 141
-
 for (i in 2:L) {
   # i = 2
   r = test[[i]][,c(1,8)]
@@ -11,14 +12,15 @@ for (i in 2:L) {
   Ret = merge(Ret, r, by = "date",all = TRUE)
 }
 Ret = Ret[-1,]
-Sp500ret = cbind.data.frame(date = Ret$date, gain = rowMeans(Ret[,-1],na.rm = TRUE))
+# Sp500ret = cbind.data.frame(date = Ret$date, gain = rowMeans(Ret[,-1],na.rm = TRUE))
+Dates = readRDS('dates.RDS')
 
 library(glmnet)
-
-nObs = nrow(Ret)
 win = 262
 
-# which.min(is.na(Ret[,index+1]))
+
+Ret = Ret[Ret$date>=Dates[1] & Ret$date<=Dates[1],]
+nObs = nrow(Ret)
 start = which.min(is.na(Ret[,index+1]))+win-1
 crossthres = Ret[,1:3]
 coefFlag = Ret
@@ -39,9 +41,13 @@ for(i in start:nObs){
   coefs <- coef(crossval, s = crossval$lambda.min)
   coefFlag[i,which(names(coefFlag) %in% coefs@Dimnames[[1]][coefs@i[-1]])] = coefs@x[-1]
 }
-saveRDS(crossthres,"Lambda.RDS")
-saveRDS(coefFlag,"LassoCoef.RDS")
+######################### save the results #####################################################
+# saveRDS(crossthres,"Lambda.RDS")
+# saveRDS(coefFlag,"LassoCoef.RDS")
+################################################################################################
 
+crossthres = readRDS('Lambda.RDS')
+coefFlag = readRDS('LassoCoef.RDS')
 coefdata = cbind.data.frame(date = coefFlag$date, ncoef = rowSums(coefFlag[,-1]!=0))
 coefdata = coefdata[which(coefdata$ncoef!=0),]
 
