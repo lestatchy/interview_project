@@ -1,7 +1,8 @@
 library(htmltab)
 library(quantmod)
-library(tidyverse)
+# library(tidyverse)
 library(tidyquant)
+library(ggplot2)
 # match("MMM",names(test))
 index = 141
 url = 'https://en.wikipedia.org/wiki/List_of_S%26P_500_companies'
@@ -111,8 +112,36 @@ ggplot(data=H5, aes(x=stock, y=correlation)) +
   geom_bar(stat="identity") +
   theme_bw()
 
+Ret = test[[1]][,c(1,8)]
+Stocks = names(test)
+colnames(Ret)[2] = Stocks[1]
+L = length(SP500.list)
+# index = 141
 
-# 
+for (i in 2:L) {
+  # i = 2
+  r = test[[i]][,c(1,8)]
+  colnames(r)[2] = Stocks[i]
+  Ret = merge(Ret, r, by = "date",all = TRUE)
+}
+Ret = Ret[-1,]
+
+
+Corr_pairwise =cor(Ret[,as.numeric(row.names(t[1:6,]))+1])
+
+library(ggcorrplot)
+
+corr <- round(Corr_pairwise, 3)
+
+# Plot
+ggcorrplot(corr, hc.order = TRUE, 
+           type = "lower", 
+           lab = TRUE, 
+           lab_size = 3,
+           method="circle",
+           colors = c("tomato2", "white", "springgreen3"),
+           title="Correlogram of the ", 
+           ggtheme=theme_bw) +theme(plot.background = element_rect(fill = "darkblue"))
 # 
 # 
 # names(MMM) <- gsub("^.+\\.","",names(MMM))  # remove "MMM." from column names

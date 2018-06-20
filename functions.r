@@ -1,6 +1,9 @@
 library(htmltab)
 library(quantmod)
-
+library(tidyquant)
+library(ggcorrplot)
+# devtools::install_github('rstudio/DT')
+library(DT)
 dat = readRDS('Data.rds')
 Dates = readRDS('dates.RDS')
 

@@ -1,5 +1,9 @@
 Ret = test[[1]][,c(1,8)]
+Stocks = names(test)
 colnames(Ret)[2] = Stocks[1]
+L = length(SP500.list)
+index = 141
+
 for (i in 2:L) {
   # i = 2
   r = test[[i]][,c(1,8)]
@@ -40,18 +44,19 @@ saveRDS(coefFlag,"LassoCoef.RDS")
 
 coefdata = cbind.data.frame(date = coefFlag$date, ncoef = rowSums(coefFlag[,-1]!=0))
 coefdata = coefdata[which(coefdata$ncoef!=0),]
+
 mean(coefdata$ncoef)
 sd(coefdata$ncoef)
 
-for(i in (start+1):nObs){
-  i = start
-  y = Ret[i,-1]
-  x = Ret[(i-win):(i-1),-1]
-  # x = as.matrix(Ret[i:(i-win+1),2:235])
-  x = x[,which(colSums(is.na(x)) == 0)]
-  y = as.numeric(y[,which(colSums(is.na(x)) == 0)])
-  x = colMeans(x)
-
-  coefs <- coef(crossval, s = crossval$lambda.min)
-  coefFlag[i,which(names(coefFlag) %in% coefs@Dimnames[[1]][coefs@i[-1]])] = coefs@x[-1]
-}
+# for(i in (start+1):nObs){
+#   i = start
+#   y = Ret[i,-1]
+#   x = Ret[(i-win):(i-1),-1]
+#   # x = as.matrix(Ret[i:(i-win+1),2:235])
+#   x = x[,which(colSums(is.na(x)) == 0)]
+#   y = as.numeric(y[,which(colSums(is.na(x)) == 0)])
+#   x = colMeans(x)
+# 
+#   coefs <- coef(crossval, s = crossval$lambda.min)
+#   coefFlag[i,which(names(coefFlag) %in% coefs@Dimnames[[1]][coefs@i[-1]])] = coefs@x[-1]
+# }

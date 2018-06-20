@@ -27,7 +27,18 @@ shinyUI(fluidPage(
 
        plotOutput("distPlot")
       ),
-       dataTableOutput("table")
+      wellPanel(    
+        fixedRow(
+        column(6,
+               plotOutput("corr")
+        ),
+        column(6,
+               dataTableOutput("table")
+        )
+      )
+      
+      
+      )
     )
   )
 ))
