@@ -25,15 +25,15 @@ shinyUI(fluidPage(
                      min = '2009-01-06',
                      max = '2017-07-25'),
 
-       plotOutput("distPlot")
+       plotOutput("candlePlot") # candlestick
       ),
       wellPanel(    
         fixedRow(
         column(6,
-               plotOutput("corr")
+               plotOutput("corr") #corr heatmap
         ),
         column(6,
-               dataTableOutput("table")
+               dataTableOutput("table")# corr table
         )
       )
       

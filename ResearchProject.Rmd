@@ -1,0 +1,149 @@
+---
+title: "Mini Research Project"
+author: "HEYANG CAO"
+date: "2018/6/20"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, echo=FALSE,message=FALSE, warning=FALSE}
+library(ggplot2)
+library(reshape2)
+library(kableExtra)
+library(TSA)
+library(data.table)
+test = readRDS('Data.rds')
+Ret = readRDS('Ret.RDS')
+
+```
+
+## Introduction
+
+A individual return can be attributed to firm-specific characteristics, like financial status, management team capability, etc., and market factors such as market betas, value, growth, etc.. 
+
+Regardless of market factors, some firm specific characteristics can be shared by similar firms. So maybe we can explain one firm’s return by its peers. I think two method can be used based on my assumption. One is that we first calculate the historical correlations and picked stocks with top ranks according some threshold or limited number to pick and regress on contemporaneous returns of these stocks. The other method is that we apply LASSO on contemporaneous returns of all other stocks and use cross validation to find the best number to pick. I implemented the LASSO method because it is more data-driven.
+
+The second model is quite simple. First I tried to use S&P 500 equal weight return as the factor to explain the firm return. Second, I used a Fama-French 3 Factor model to decompose the firm return. Both methods are done by time series regressions.
+
+## LASSO
+
+It turns out that peers are not providing enough explanation power of the firm returns as shown below:
+
+```{r, echo=FALSE}
+crossthres = readRDS('Lambda.RDS')
+coefFlag = readRDS('LassoCoef.RDS')
+nObs = 2000
+index = 141
+win = 262
+start = which.min(is.na(Ret[,index+1]))+win-1
+coefdata = cbind.data.frame(date = coefFlag$date, ncoef = rowSums(coefFlag[,-1]!=0))
+coefs = coefFlag[,-1]
+s = Ret[1:nObs,-1]
+s[is.na(s)] = 0
+explained = rowSums(coefs*s)
+r = data.frame(date = Ret$date[1:nObs], explained = explained, actual = Ret$MMM[1:nObs], 
+               diff = abs(Ret$MMM[1:nObs] - explained))
+r = r[-(1:start),]
+r_stat = colMeans(r[,c(2,3,4)])
+```
+
+```{r, echo=FALSE}
+r_stat = data.frame(AverageExplainedReturn = r_stat[1],
+                    AverageActualReturn = r_stat[2],
+                    AverageDeviation = r_stat[3])
+rownames(r_stat) = NULL
+kable(r_stat) %>%
+  kable_styling(full_width = F)
+
+```
+
+```{r, echo=FALSE}
+r_melted = melt(r[,1:3],id = 'date')
+ggplot(r_melted,
+      aes(x=date, y=value, colour=variable)) +
+  geom_line(alpha=0.4)
+
+ggplot(r, aes(x=date,y=diff)) +
+  geom_line()
+```
+
+## Factor Model
+
+### One Factor Model
+
+First I used the market beta to explain the individual returns. I regress MMM daily returns on the return by equal-weighting the whole universe of S&P500 stocks, which can be a delegate of market. It does not provide a good explanation of the individual returns as you can see below. I would argue that there are other factors and firm-specific characteristics affacting stock prices.
+
+```{r pressure, echo=FALSE,message=FALSE, warning=FALSE}
+
+
+Sp500ret = cbind.data.frame(date = Ret$date, gain = rowMeans(Ret[,-1],na.rm = TRUE))
+Dates = readRDS('dates.RDS')
+
+MMM = data.frame(date = Ret$date, gain = Ret$MMM)
+
+win = 262
+betas = data.frame(date = NULL, intercept = NULL, beta = NULL, unexplained = NULL)
+for (i in win:nrow(MMM)) {
+  y = MMM$gain[(i-win+1):i]
+  x = Sp500ret$gain[(i-win+1):i]
+  reg = lm(y~x)
+  tmp = data.frame(date = MMM$date[i], intercept = reg$coefficients[1], 
+                   beta = reg$coefficients[2], unexplained = reg$residuals[win])
+  betas =rbind.data.frame(betas,tmp)
+}
+f1 = merge(betas,MMM, by='date')
+f1 = data.frame(explained = f1$gain-f1$unexplained, actual = f1$gain, deviation = abs(f1$unexplained))
+f1_stat = data.frame(AverageExplainedReturn = mean(f1$explained),
+                    AverageActualReturn = mean(f1$actual),
+                    AverageDeviation = mean(f1$deviation))
+
+ggplot(betas, aes(x = date, y = beta)) +
+  geom_line() +
+  labs(title="Market Betas")
+
+
+ggplot(betas, aes(x = unexplained)) +
+  geom_histogram() +  
+  labs(title="Histogram for unexplained returns")
+
+```
+
+### Three Factor Model
+
+Here I used Fama-French 3-factor model to try to explain the individual returns. I didn't construct the factors by my own but used the available factors on Prof. French's website.
+
+```{r, echo=FALSE}
+betas_3f = readRDS('betas_3f.RDS')
+betas_3f_melted = melt(betas_3f[,c(1,3,4,5)], id = 'date')
+f3 = merge(betas_3f,MMM, by='date')
+f3 = data.frame(explained = f3$gain-f3$unexplained, actual = f3$gain, deviation = abs(f3$unexplained))
+f3_stat = data.frame(AverageExplainedReturn = mean(f3$explained),
+                    AverageActualReturn = mean(f3$actual),
+                    AverageDeviation = mean(f3$deviation))
+
+ggplot(betas_3f_melted,aes(x = date, y = value, colour=variable)) +
+  geom_line(alpha = 0.4) +
+  ylab("beta") + 
+  theme(legend.title=element_blank())
+
+```
+```{r, echo=FALSE}
+f_stat = rbind.data.frame(f1_stat,f3_stat)
+rownames(f_stat) = c("1-Factor", "3-Factor")
+kable(f_stat) %>%
+  kable_styling(full_width = F)
+
+```
+
+### Conclusion
+
+Compared to LASSO, factor models show higher explanation power. And 3-factor model has done better than 1-factor model. I believe that there may be other methods can achieve higher results, but factor models have plausible economic justifications while data mining can be an issue in many other methods.
+
+### Next Step
+
+The reason why I don't want to use OLS regression is that it requires very long historical data because of the high dimensions eating up the degree of freedom. Two possible solutions came up to my mind. The first one was some typical dimension-reduction method, for example, PCA, DCT and Wavelet transformation. But they are pure data driven and I cannot find sound fundamental justification for them. 
+
+Then I came up with the Kalman filter, which is a dynamic linear MMSE estimator. It does not have the restriction on prior data. In fact, I am trying to implement the Kalman filter. I have not shown it in this summary because I currently have problem with the covariance matrix, which should be converging to a steady state according my experience. In my case, however, it diverges. I need some time to figure out how it happens since it is really time-consuming when dealing with large matrix (500-by-500) operations. I am not requiring additional time. I just want to make it perfect. So let me know if you are interested, I would keep it updated on my Git. I would also like to mention that even Kalman filter has the potential to deliver better result, but it can be just data mining.
