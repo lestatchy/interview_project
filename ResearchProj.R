@@ -61,8 +61,8 @@ for(i in start:nObs){
   }
 }
 ######################### save the results #####################################################
-saveRDS(crossthres,"Lambda.RDS")
-saveRDS(coefFlag,"LassoCoef.RDS")
+# saveRDS(crossthres,"Lambda.RDS")
+# saveRDS(coefFlag,"LassoCoef.RDS")
 ################################################################################################
 
 crossthres = readRDS('Lambda.RDS')

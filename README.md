@@ -1,12 +1,15 @@
 # Invesco QRTradingTest
 
-## Data preparation: foundation.R
+### Data preparation: 
+##### foundation.R
 
 In data preparation, I use Wikipedia as the data source for the list of S&P 500 components and Yahoo Finance as the data source for daily prices. The process in downloading the data can be very time-consuming because of the restrictions from the server side. So rather than request the data every time, I download the data with long enough horizon and store it locally. And new request will be performed only when extra data needed. Indeed, it would be much better if I can build a database locally.
 
-## ShinyApp: ui.R, server.R, function.r
+### ShinyApp: 
+##### ui.R, server.R, function.r
 
-## Research Project: ResearchProj.R, Model2.R, ResearchProject.Rmd, ResearchProject.pdf
+### Research Project: 
+##### ResearchProj.R, Model2.R, ResearchProject.Rmd, ResearchProject.pdf
 
 A individual return can be attributed to firm-specific characteristics, like financial status, management team capability, etc., and market factors such as market betas, value, growth, etc.. 
 
