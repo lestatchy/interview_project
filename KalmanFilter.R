@@ -3,7 +3,7 @@ index = 141
 Ret = readRDS("Ret.RDS")
 
 nObs = nrow(Ret)
-nObs = 2000
+# nObs = 2620
 RetData = Ret[,-1]
 nVar = ncol(RetData)-1
 Z = unlist(RetData[index])[1:nObs]
@@ -11,57 +11,81 @@ Z_prior = data.frame(date = Ret$date[1:nObs], r_prior = rep(0,nObs))
 Z_post = data.frame(date = Ret$date[1:nObs], r_post = rep(0,nObs))
 E_prior = data.frame(date = Ret$date[1:nObs], err_prior = rep(0,nObs))
 E_post = data.frame(date = Ret$date[1:nObs], err_post = rep(0,nObs))
-H = RetData[,-index]
-loadings = Ret[,-index]
-loadings[,-1][] = 0
-#### Initial states
-#### Initial state of x, y
-x = rep(c(1/nVar,0.1/nVar),nVar)
-#### x_t = Ax_{t-1} + w_t
-A = diag(nVar) %x% matrix(c(1,0,1,1),nrow = 2)
-#### Initial state of the covariance matrix
-# P = diag(nVar*2)*cov(x)
-P = x%*%t(x)
-Q = 0
-R = Z[1]^2
-I = diag(nVar*2)
-F = diag(nVar*2)
-# A = F
+Parameters = data.frame(date = Ret$date[1:nObs], Kalman_gain = rep(0,nObs), R = rep(0,nObs), Q = rep(0,nObs))
+################################# Kalman Filter ##############################################################
+#### Step 1
+T = diag(nVar)
+x0 = matrix(rep(1/nVar,nVar),ncol = 1)
+P0 = diag(nVar)
+R0 = 0.01
+R = R0
+Q = diag(nVar)*0.03^2
+m = 90
+V = matrix(rep(0,m),nrow = 1)
+# H = RetData[,-index]
 for (i in 1:nObs) {
-  #### x_{k|k-1}
-  x_prior = A%*%x
-  #### P_{k|k-1}
-  P_prior = A%*%P%*%t(A) + Q
-  #### H_k
-  t = unlist(RetData[i,-index])
-  t[is.na(t)] = 0
-  H = t(as.matrix(kronecker(t,c(1,0))))
-  Z_prior[i,2] = H%*%x_prior
-  #### y_k = z_k - H_k * x_{k|k-1}
-  y_tilda = Z[i] - H%*%x_prior
-  E_prior[i,2] = y_tilda
-  #### S_k
-  S = H%*%P_prior%*%t(H) + R
-  #### K_k: Kalman Gain
-  K = P_prior%*%t(H)%*%solve(S)
-  #### x_{k|k}: estimated loadings
-  x = x_prior + K%*%y_tilda
-  #### P_{k|k}
-  P = (I-K%*%H)%*%P%*%t(I-K%*%H) + K%*%R%*%t(K)
-  #### post fiting error
-  E_post[i,2] = Z[i] - H%*%x
-  loadings[i,-1] = x
-  Z_post[i,2] = H%*%x
-  # R = y_tilda^2
-}                   
-ss = merge(Z_post,Z_prior,by = "date")
-ss = cbind.data.frame(ss,Z)
-ss = ss[1:50,]
+  #### Step 2
+  x1 = T%*%x0
+  #### Step 3: Predict P
+  P1 = T%*%P0%*%t(T) + Q
+  #### Step 4: Innovation
+  y = Z[i]
+  H = matrix(unlist(RetData[i,-index]), nrow = 1)
+  H[is.na(H)] = 0
+  Hx1 = H%*%x1
+  v = y - Hx1
+  V = cbind(V,v)
+  V = matrix(V[,-1],nrow = 1)
+  #### Step 5: Innovation covariance
+  HPH = H%*%P1%*%t(H)
+  F = HPH + R
+  #### Step 6: Update Kalman gain
+  K = P1%*%t(H)/as.numeric(F)
+  Parameters$Kalman_gain[i] = sum(K)
+  #### Step 6: Update state estimate
+  x0 = x1 + K*as.numeric(v)
+  #### Step 7: Update state covariance
+  P0 = P1 - P1%*%t(H)%*%H%*%P1/as.numeric(F)
+  #### Step 8: Update Q
+  VV = V%*%t(V)/m
+  lambda = (VV-R)%*%solve(HPH)
+  if(lambda<0) lambda = 1
+  Q = Q*sqrt(lambda)
+  Parameters$Q[i] = sum(diag(Q))
+  #### Step 9: Update R
+  R = VV - HPH
+  if(det(R)<0) R = R0
+  Parameters$R[i] = R
+  #### Store data for current step
+  Z_prior[i,2] = Hx1
+  Z_post[i,2] = H%*%x0
+  E_prior[i,2] = v
+  E_post[i,2] = y-Z_post[i,2]
+}     
+results = merge(Z_prior,Z_post,by = "date")
+results = cbind.data.frame(Z,results)
+results = merge(results,E_prior,by = "date")
+results = merge(results,E_post,by = "date")
+results = merge(results,Parameters,by = "date")
+colnames(results)[2] = "r_actual"
+saveRDS(results,"KF.RDS")
 
+
+################################# Result Presentation ########################################################
 library(ggplot2)
 library("reshape2")
-test_data_long <- melt(ss[,c(1,2,4)], id="date")  # convert to long format
-
-ggplot(data=test_data_long,
+r_rpost <- melt(results[,c(1,2,4)], id="date")  # convert to long format
+r_rprior <- melt(results[,c(1,2,3)], id="date")  # convert to long format
+e <- melt(results[,c(1,5,6)], id="date")  # convert to long format
+ggplot(data=r_rpost,
        aes(x=date, y=value, colour=variable)) +
-  geom_line()
+  geom_line(alpha = 0.5)
+
+ggplot(data=r_rprior,
+       aes(x=date, y=value, colour=variable)) +
+  geom_line(alpha = 0.5)
+
+ggplot(data=e,
+       aes(x=date, y=value, colour=variable)) +
+  geom_line(alpha = 0.5)
+
