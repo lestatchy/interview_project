@@ -3,9 +3,10 @@ title: "Introduction to Some Signal Processing Models"
 author: "HEYANG CAO"
 date: "2018/6/25"
 output: pdf_document
+urlcolor: blue
 ---
 
-```{r setup, include=FALSE}
+```{r setup, include=FALSE, echo=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library(kableExtra)
 ```
@@ -14,11 +15,11 @@ library(kableExtra)
 
 #### Discrete Wavelet Transform (DWT)
 
-DWT is widely used in signal processing, especially in image signal processing. The compression image formatting JPEG-2000 is based on DWT. Compared to Fourier transform, wavelet transform captures both frequency and location information. Below is a result of a wavelet transform showing how it works.
+DWT is widely used in signal processing. For example, the compression image formatting JPEG-2000 is based on DWT.  Compared to Fourier transform, wavelet transform captures both frequency and location information. It can reveal the trends and periodicity in unstationary time series. Below is a result of a wavelet transform showing how it decomposes an image.
 
 ####![Wavelet Transform](wavelet.jpg)
 
-Therefore, I wonder if DWT can be used to detect seasonalities and cycles, and attribute returns to different lengths of seasonalities.
+<!-- Therefore, I wonder if DWT can be used to detect seasonalities and cycles, and attribute returns to different lengths of seasonalities. -->
 
 #### Principle Component Analysis (PCA)
 
@@ -26,24 +27,95 @@ PCA is the most popular algorithm among all the methods introduced in this artic
 
 
 
-#### Independent Component Analysis (ICA)
+<!-- #### Independent Component Analysis (ICA) -->
 
-ICA is the most promissing algorithm in speech signal processing before DNN dominates this field. It comes from a simple but genius idea: reverse application of central limit theorem. It was first introduced to seperate voices of two different speakers. Detailed description of this algorithm can be found in [[1]](/ICA.pdf). ICA is very similar to PCA. The key point of ICA different with PCA is that it assumes that the components are mutually independent (Any order moment is 0, not just uncorrelated) and are marginally non-Gaussian distributed. Under this assumption, however, it is much harder to find practical justifications than PCA does.
+<!-- ICA is one of the most promissing algorithm in speech signal processing before DNN dominates this field. It comes from a simple but genius idea: reverse application of central limit theorem. It was first introduced to seperate voices of two different speakers. Detailed description of this algorithm can be found in [[2]](/ICA.pdf). ICA is very similar to PCA. The key point of ICA different with PCA is that it assumes that the components are mutually independent (Any order moment is 0, not just uncorrelated) and are marginally non-Gaussian distributed. Under this assumption, however, it is much harder to find practical justifications than PCA does. This is also one reason why the application of ICA is not included in the next part. I attached my experiment on ICA in the Appendix I. -->
 
 #### Kalman Filter
 
-Kalman filter is widely used in signal processing such as signal prediction and smoothing given very little prior information. In our case, with more than 500 dimensions of every states, it is really hard to use ordinary regression because of the rank deficiency at beginning. The Kalman filter, however, can give estimates at very beginning and quickly converges to the BLUE estimator. There are many derivatives of Kalman filter, such as Extended KF and Unscented KF. Adaptive KF is used in this project. The methodology can be found in [[2]](/Improving Adaptive Kalman Estimation in GPSINS Int.pdf), [[3]](/Market Risk Beta Estimation using Adaptive Kalman Filter.pdf).
+Kalman filter is widely used in signal processing such as signal prediction and smoothing given very little prior information. In our case, with more than 500 dimensions of every states, it is really hard to use ordinary regression because of the rank deficiency at beginning. The Kalman filter, however, can give estimates at very beginning and quickly converges to the BLUE estimator. There are many derivatives of Kalman filter, such as Extended KF and Unscented KF. Adaptive KF is used in this project. The methodology can be found in [Improving Adaptive Kalman Estimation in GPSINS Int.pdf](/Improving Adaptive Kalman Estimation in GPSINS Int.pdf), [Market Risk Beta Estimation using Adaptive Kalman Filter.pdf](/Market Risk Beta Estimation using Adaptive Kalman Filter.pdf).
 
 ## Applications
 
 #### Discrete Wavelet Transform (DWT)
+Wavelet transform can be a good tool to analyse the seasonal features in our case. It decomposes the return signal into different scale levels.
+
+```{r,echo=FALSE}
+index = 141
+Ret = readRDS("Ret.RDS")
+
+nObs = nrow(Ret)
+nObs = 2^12
+RetData = Ret[,-1]
+nVar = ncol(RetData)-1
+Z = unlist(RetData[index])[1:nObs]
+
+library(wavelets)
+library(ggplot2)
+library(gridExtra)
+library(reshape2)
+days = Ret$date[1:nObs]
+
+wt =  dwt(Z, n.levels=12,boundary="reflection", fast = FALSE)
+wt_origin = wt
+wtcoef = list()
+for (i in 1:12) {
+  wtcoef[[i]] = wt@W[[i]]
+  wt@W[[i]][] = 0
+}
+decomposed = data.frame(date = days)
+p1 <- list()
+for (i in 1:12) {
+  # i = 1
+  wtmp = wt
+  # wtmp
+  wtmp@W[[i]] = wtcoef[[i]]
+  decomposed = cbind.data.frame(decomposed,idwt(wtmp))
+  colnames(decomposed)[i+1] = paste("component at level",i)
+  tmp = decomposed[,c(1,i+1)]
+  colnames(tmp) = c("date","signal")
+  p1[[i]] = ggplot(data = tmp) +
+    geom_line(aes(x = date, y = signal)) +
+    ylab(paste("scale at",i)) +
+    theme(axis.title.x=element_blank())
+}
+grid.arrange(grobs = p1)
+decomposed_melted = melt(decomposed,id = "date")
+
+ggplot(data = decomposed_melted,aes(x = date,y=value,colour = variable)) +
+  geom_line(alpha = 0.4) +
+  theme_bw()
+```
+
+\newpage
+Through Wavelet transform, we can look into the signal recovered at different scales.
+
+```{r,echo=FALSE}
+
+wt =  dwt(Z, n.levels=12,boundary="reflection", fast = FALSE)
+Z_rec = data.frame(date = days)
+p <- list()
+for (i in 1:12) {
+  tmp = idwt(wt)
+  Z_rec = cbind.data.frame(Z_rec,tmp)
+  colnames(Z_rec)[i+1] = paste("resolution at",i)
+  tmp = Z_rec[,c(1,i+1)]
+  colnames(tmp) = c("date","signal")
+  p[[i]] = ggplot(data = tmp)+geom_line(aes(x = date, y = signal))+ylab(paste("recovered at",i))
+  wt@W[[i]][] = 0
+}
+grid.arrange(grobs = p)
+
+```
+
+Although there seems to exist some seasonalities in the signal, the intensity of the seasonality is low. Most of the energy of the return signal is in high-frequency band. I think it might be better if we could use monthly data instead of daily data. I want to emphasis that Wavelet transform does not require the signal to be stationary, while it is required in ARIMA model. And in fact, the return signals mostly are not stationary in reality.
 
 
 
 #### Principle Component Analysis (PCA)
 
 PCA is mostly used in finding underlying factors. In our case, it can also be used to deal with the high dimensional problem, namely the number of variables exceeding the number of obeservations, which leads to singular matrix in calculation. It is not perfect solution however, since it losses information when doing dimension reduction.
-```{r}
+```{r, echo=FALSE}
 
 index = 141
 Ret = readRDS("Ret.RDS")
@@ -53,18 +125,6 @@ nObs = nrow(Ret)
 RetData = Ret[,-1]
 nVar = ncol(RetData)-1
 inSample = round(nObs/2)
-outSample = nObs - inSample
-# hc = hclust(dist(t(RetData)))
-corr = rep(NA,ncol(RetData))
-for (i in 1:ncol(RetData)) {
-  df = merge(x = Ret[1:inSample,c(1,index+1)], y = Ret[1:inSample,c(1,i+1)], by = "date")
-  df = df[complete.cases(df),]
-  scaler = nrow(df)/inSample
-  if (scaler>0) {
-    corr[i] = cor(df[,2],df[,3])*scaler
-  }
-}
-# picked = order(-corr)[2:11]
 r = RetData[1:inSample,]
 r = r[ , colSums(is.na(r)) == 0]
 r = as.matrix(r)
@@ -72,27 +132,18 @@ m = colMeans(r)
 r = sweep(r,2,m)
 c = cov(r)
 e = eigen(c)
-# RetData[is.na(RetData)] = 0
-# e0 = eigen(cov(RetData))
 loadings = sweep(e$vectors,2,sqrt(e$values),"*")
 PCs = r%*%loadings
 w = solve(loadings)
-# PCs = sweep(PCs,2,sqrt(e$values),"*")
-# w = solve(sweep(e$vectors,2,sqrt(e$values),'*'))
 PCs_tr = apply(PCs,2, function(x) cumprod(1+x))
 PCs_tr = as.data.frame(PCs_tr)
 PCs_tr = cbind.data.frame(Ret$date[1:inSample],PCs_tr)
 colnames(PCs_tr)[1] = "date"
-
-
-
-# pca = prcomp(r)
 ExpPwr = e$values/sum(e$values)
 cumExpPwr = cumsum(ExpPwr)
 PCA_stat = data.frame(PCs = 1:length(e$values),
                       "Marginal Explaining Power" = ExpPwr, 
                       "Cumulative Explaining Power" = cumExpPwr)
-
 library(reshape2)
 PCA_stat_scaled = PCA_stat
 PCA_stat_scaled$Marginal.Explaining.Power = PCA_stat_scaled$Marginal.Explaining.Power*4
@@ -102,7 +153,7 @@ ggplot(PCA_stat_scaled,aes(x = PCs)) +
   geom_bar(aes(y = Marginal.Explaining.Power, colour = "Marginal Explaining Power"),
            stat = "identity",alpha = 0.4) +
   geom_line(aes(y = Cumulative.Explaining.Power, colour = "Cumulative Explaining Power")) +
-  scale_y_continuous("Cumulative", sec.axis = sec_axis(~./4, name = "Marginal"))
+  scale_y_continuous("Cumulative", sec.axis = sec_axis(~./4, name = "Marginal"))+theme_bw()
 
 PC5 = PCs_tr[,1:6]
 colnames(PC5)[2:6] = c("PC1","PC2","PC3","PC4","PC5")
@@ -110,7 +161,7 @@ colnames(PC5)[2:6] = c("PC1","PC2","PC3","PC4","PC5")
 PC5_melted = melt(PC5, id = "date")
 ggplot(data = PC5_melted,
        aes(x = date, y = value, colour = variable)) +
-  geom_line()
+  geom_line()+theme_bw()
 
 w5 = w[1:5,]
 r_est = PCs[,1:5]%*%w5
@@ -120,9 +171,6 @@ PCA_pred = data.frame(stock = 1:ncol(r),
                       "estimate at t" = r_est[inSample,], 
                       "error at t" = e)
 PCA_pred_melted = melt(PCA_pred[,1:3],id = "stock")
-ggplot(data = PCA_pred_melted,
-       aes(x = stock, y = value, colour = variable)) +
-  geom_line()
 ggplot(data=PCA_pred_melted, aes(x=stock, y=value, fill=variable)) +
   geom_bar(stat="identity", position=position_dodge()) + theme_bw()
 ggplot(PCA_pred, aes(x=error.at.t)) + 
@@ -132,15 +180,14 @@ ggplot(PCA_pred, aes(x=error.at.t)) +
 ```
 
 
-#### Independent Component Analysis (ICA)
-
 #### Kalman Filter
 
-In this part, all stock data in the S&P 500 universe is used for estimate the stock return of MMM. As the result has shown below, it seems that Kalman filter can provide a very accurate posteriori estimate and good one step prediction. There is one concern that the model's accuracy to some degree relies on the initial values of Q, the covariance matrix of state transition noise, and R, the variance of estimate noise. Adaptive Kalman filter is designed to eliminate the influence of inaccurate initial values of Q and R. In our case, however, it does not work well given the fact that these noises are not necessarily jointly Gaussian distributed. If they are not, one of the basic assumptions of Kalman filter including adaptive Kalman filter is violated.
+In this part, all stock data in the S&P 500 universe is used for estimate the stock return of MMM. As the result has shown below, it seems that Kalman filter can provide a very accurate posteriori estimate and good one step prediction. There is one concern that the model's accuracy to some degree relies on the initial values of Q, the covariance matrix of state transition noise, and R, the variance of estimate noise. Adaptive Kalman filter is designed to eliminate the influence of inaccurate initial values of Q and R. 
+
 
 ```{r, echo=FALSE}
 library(ggplot2)
-library("reshape2")
+library(reshape2)
 results = readRDS("KF.RDS")
 r_rpost <- melt(results[,c(1,2,4)], id="date")  # convert to long format
 r_rprior <- melt(results[,c(1,2,3)], id="date")  # convert to long format
@@ -150,19 +197,19 @@ ggplot(data=r_rpost,
        aes(x=date, y=value, colour=variable)) +
   geom_line(alpha = 0.5) +
   ggtitle("Actual Return VS Posteriori Estimate") +
-  ylab("return")
+  ylab("return")+theme_bw()
 
 ggplot(data=r_rprior,
        aes(x=date, y=value, colour=variable)) +
   geom_line(alpha = 0.5) +
   ggtitle("Actual Return VS Priori Estimate (Prediction)") +
-  ylab("return")
+  ylab("return")+theme_bw()
 
 ggplot(data=e,
        aes(x=date, y=value, colour=variable)) +
   geom_line(alpha = 0.5) +
   ggtitle("Priori Error VS Posteriori Error") +
-  ylab("error")
+  ylab("error")+theme_bw()
 ```
 
 ```{r, echo=FALSE}
@@ -177,3 +224,36 @@ kable(kf_stat) %>%
   kable_styling(full_width = F, bootstrap_options = "condensed")
 ```
 
+## Conculsion
+
+These models are commonly used in signal processing. They can also be categorized into machine learning in a broad sense. Although some of them may not be used in building models, but all of them are very helpful in analyzing data and finding features. For example, Kalman filter and Wavelet transform are good tools to deal with nonstationary signals, which exist everywhere in financial world.
+
+
+<!-- \newpage -->
+
+<!-- #### Appendix I: Independent Component Analysis (ICA) -->
+
+<!-- There are two assumptions needed to be true in order to use ICA in our case. First, the factors driving the returns moving are mutually independent or can be decomposed into independent components. Second, these factors are not normal distributed. Although, the second assumption seems make sense since most economic factors are not normal, the first assumption is not easy to be satisfied because there are little discussion on independence of factors. And the arguement that two economic factors are independent looks unreasonable and is hard to prove. it might be however able to identify some firm-specific characteristics compensated by unexplained part in factor models. In this case, excess return against market of MMM and V are used. Their correlation is -0.001, very close to 0. Two independent signals are shown below: -->
+<!-- ```{r} -->
+<!-- library(fastICA) -->
+<!-- picked = order(corr)[2] -->
+<!-- Sp500ret = cbind.data.frame(date = Ret$date, gain = rowMeans(Ret[,-1],na.rm = TRUE)) -->
+<!-- reg_1 = lm(r[,index]~Sp500ret$gain[1:inSample]) -->
+<!-- reg_2 = lm(r[,picked]~Sp500ret$gain[1:inSample]) -->
+<!-- # re = r[,c(index,picked)]-Sp500ret$gain[1:inSample] -->
+<!-- ica = fastICA(cbind(reg_1$residuals,reg_2$residuals),2) -->
+<!-- S = ica$S/30 -->
+<!-- A = ica$A*30 -->
+<!-- r_est_ica = S%*%A -->
+<!-- STr = apply(S, 2, function(x) cumprod(1+x)) -->
+<!-- Signal = data.frame(date = Ret$date[1:inSample], Signal_1 = STr[,1], Signal_2 = STr[,2]) -->
+<!-- Signal_melted = melt(Signal, id = "date") -->
+<!-- ggplot(data = Signal_melted, -->
+<!--        aes(x = date, y = value, colour = variable)) + -->
+<!--   geom_line()+theme_bw() -->
+<!-- ``` -->
+
+<!-- One may argue that Signal_1 seems to reveal the effect of tech bubble, which is actually not what we expect. it shows that there at least one factor can be added to the factor model(in this case 1-factor model). However, if we could successfully exclude all factor driven effects on the return data. The result signals are very hard to find their financial meanings. Another concern is that two-stock universe is apparently not complete. In fact, it is hard to  -->
+
+<!-- \newpage -->
+<!-- #### Reference -->
